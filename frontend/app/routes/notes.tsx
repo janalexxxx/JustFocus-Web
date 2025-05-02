@@ -1,6 +1,6 @@
 import { json, redirect } from '@remix-run/node';
-import { Form, useLoaderData } from '@remix-run/react';
-import { getNotes, addNote, deleteNote } from '~/models/notes.server';
+import { Form, useLoaderData, useSearchParams } from '@remix-run/react';
+import { getNotes, addNote, deleteNote, updateNote } from '~/models/notes.server';
 
 export const loader = async () => {
   const notes = await getNotes();
@@ -10,13 +10,15 @@ export const loader = async () => {
 export const action = async ({ request }: { request: Request }) => {
   const formData = await request.formData();
   const intent = formData.get('intent');
+  const id = formData.get('id')?.toString();
+  const title = formData.get('title')?.toString();
 
-  if (intent === 'add') {
-    const title = formData.get('title') as string;
+  if (intent === 'add' && title) {
     await addNote(title);
-  } else if (intent === 'delete') {
-    const id = formData.get('id') as string;
+  } else if (intent === 'delete' && id) {
     await deleteNote(id);
+  } else if (intent === 'edit' && title && id) {
+    await updateNote(id, title);
   }
 
   return redirect('/notes');
@@ -24,6 +26,8 @@ export const action = async ({ request }: { request: Request }) => {
 
 export default function NotesPage() {
   const { notes } = useLoaderData<typeof loader>();
+  const [searchParams] = useSearchParams();
+  const editingId = searchParams.get('edit');
 
   return (
     <div>
@@ -36,11 +40,25 @@ export default function NotesPage() {
       <ul>
         {notes.map(note => (
           <li key={note.id}>
-            {note.title}
-            <Form method="post" style={{ display: 'inline' }}>
-              <input type="hidden" name="id" value={note.id} />
-              <button type="submit" name="intent" value="delete">Delete</button>
-            </Form>
+            {editingId === note.id ? (
+              // Edit Mode
+              <Form method="post">
+                <input type="hidden" name="id" value={note.id} />
+                <input name="title" defaultValue={note.title} />
+                <button type="submit" name="intent" value="edit">Save</button>
+                <a href="/notes">Cancel</a>
+              </Form>
+            ) : (
+              // View Mode
+              <>
+                {note.title}{' '}
+                <a href={`/notes?edit=${note.id}`}>Edit</a>{' '}
+                <Form method="post" style={{ display: 'inline' }}>
+                  <input type="hidden" name="id" value={note.id} />
+                  <button type="submit" name="intent" value="delete">Delete</button>
+                </Form>
+              </>
+            )}
           </li>
         ))}
       </ul>
